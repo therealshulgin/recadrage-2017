@@ -265,6 +265,19 @@ h1{font:800 clamp(50px,8.9vw,128px)/.88 var(--fd);letter-spacing:-.047em;margin-
 .pv-cut{position:absolute;top:-4px;bottom:22px;border-left:1.5px dashed var(--ink);pointer-events:none}
 .pv-cut span{position:absolute;top:-16px;left:6px;font:600 10px/1 var(--fm);font-stretch:87.5%;text-transform:uppercase;white-space:nowrap}
 .pv-note{margin-top:18px;font-size:13.5px;line-height:1.55;color:var(--muted);max-width:90ch}
+/* Sur téléphone, la frise est verticale : le temps descend, une colonne par fonction, les années à gauche */
+.pv-vhead,.pv-vbody{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(0,1fr);column-gap:6px}
+.pv-vhead{align-items:end;margin-bottom:8px}
+.pv-vhead b{font:600 10.5px/1.25 var(--fm);font-stretch:87.5%;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+.pv-vbody{position:relative}
+.pv-vaxis{position:relative;font:500 10.5px/1 var(--fm);color:var(--muted)}
+.pv-vaxis span{position:absolute;left:0;transform:translateY(-50%)}
+.pv-vtrack{position:relative}
+.pv-lanes.v .pv-seg{left:0;right:0;bottom:auto;box-shadow:inset 0 -1px 0 var(--card)}
+.pv-vcut{position:absolute;left:34px;right:0;border-top:1.5px dashed var(--ink);pointer-events:none}
+.pv-vcut span{position:absolute;right:0;top:-9px;padding:2px 5px;background:var(--card);font:600 10px/1 var(--fm);font-stretch:87.5%;text-transform:uppercase;white-space:nowrap}
+.pv-vnow{position:absolute;right:-9px;bottom:0;width:5px;border:2px solid var(--droite);border-left:0;pointer-events:none}
+.pv-vnow-l{margin-top:12px;font:600 10px/1.35 var(--fm);font-stretch:87.5%;text-transform:uppercase;letter-spacing:.03em;text-align:right}
 .pv-493 h3{font:700 clamp(22px,1.9vw,27px)/1.06 var(--fd);letter-spacing:-.02em;margin-top:12px}
 .pv-493 .sub{font-size:15px;line-height:1.5;color:var(--ink-soft);margin-top:8px;max-width:70ch}
 .pv-rows{margin-top:18px}
@@ -500,8 +513,6 @@ h1{font:800 clamp(50px,8.9vw,128px)/.88 var(--fd);letter-spacing:-.047em;margin-
   .cr>summary{grid-template-columns:minmax(0,1fr) 18px}
   .cr-cs{grid-column:1/-1;grid-row:2}
   .cr-det{padding-left:0}
-  .pv-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-top:38px}
-  .pv-lanes{min-width:760px}
   .pv-row{grid-template-columns:minmax(0,46%) minmax(0,1fr) 28px}
   .pv-row .nm small{display:none}
   .bu-plot{height:150px;gap:3px}
@@ -1529,6 +1540,42 @@ h1{font:800 clamp(50px,8.9vw,128px)/.88 var(--fd);letter-spacing:-.047em;margin-
       tuile('À la tête du gouvernement', P.gouv, L - P.gouv, 0),
       tuile('Les deux à la fois', P.deux, P.aucun, L - P.deux - P.aucun));
     const lanes = $('#pvLanes'); lanes.replaceChildren();
+    const nom = m => COURT[m[1]] || m[1].split(' ').slice(1).join(' ');   // « de Gaulle », « Mendès France »
+    const duree = fLongAn((Date.parse(P.fin) - Date.parse(PV.droite_depuis)) / 31557600000);
+    const vertical = NARROW();
+    lanes.classList.toggle('v', vertical);
+    if (vertical) {
+      // Téléphone : le temps descend, 8 px par an ; une colonne par fonction ; les années à gauche
+      const body = el('div', 'pv-vbody'), axis = el('div', 'pv-vaxis'), head = el('div', 'pv-vhead');
+      body.style.height = Math.round(span / 31557600000 * 8) + 'px';
+      head.append(el('span'), el('b', null, 'Chef de l’État'), el('b', null, 'Chef du gouvernement'));
+      for (let y = Math.ceil((+P.debut.slice(0, 4) + 1) / 10) * 10; y <= +P.fin.slice(0, 4); y += 10) {
+        const s = el('span', null, String(y)); s.style.top = x(y + '-01-01') + '%'; axis.append(s);
+      }
+      body.append(axis);
+      [0, 1].forEach(role => {
+        const track = el('div', 'pv-vtrack');
+        PV.mandats.forEach((m, k) => {
+          const a = x(m[2]), b = x(m[3]);
+          if (m[0] !== role || b - a <= 0) return;
+          const s = el('div', 'pv-seg' + (m[5] ? ' g' : '')); s.dataset.k = k;
+          s.style.top = a + '%'; s.style.height = (b - a) + '%';
+          s.append(el('span', null, nom(m)));
+          track.append(s);
+        });
+        body.append(track);
+      });
+      if (pvFrom === '1945') {
+        const cut = el('div', 'pv-vcut'); cut.style.top = x('1959-01-08') + '%';
+        cut.append(el('span', null, 'Ve République')); body.append(cut);
+      }
+      const now = el('div', 'pv-vnow'); now.style.top = x(PV.droite_depuis) + '%'; body.append(now);
+      lanes.append(head, body, el('p', 'pv-vnow-l', 'Droite sans interruption depuis ' + depuis + ' · ' + duree));
+      // Un nom ne reste que s'il tient dans la hauteur et la largeur de son mandat
+      [...body.querySelectorAll('.pv-seg span')].filter(sp => sp.offsetHeight + 4 > sp.parentElement.offsetHeight || sp.offsetWidth + 8 > sp.parentElement.offsetWidth)
+        .forEach(sp => sp.remove());
+      return;
+    }
     [['Chef de l’État', 0], ['Chef du gouvernement', 1]].forEach(([label, role]) => {
       const lane = el('div', 'pv-lane'), track = el('div', 'pv-track');
       PV.mandats.forEach((m, k) => {
@@ -1536,7 +1583,7 @@ h1{font:800 clamp(50px,8.9vw,128px)/.88 var(--fd);letter-spacing:-.047em;margin-
         if (m[0] !== role || b - a <= 0) return;
         const s = el('div', 'pv-seg' + (m[5] ? ' g' : '')); s.dataset.k = k;
         s.style.left = a + '%'; s.style.width = (b - a) + '%';
-        s.append(el('span', null, COURT[m[1]] || m[1].split(' ').slice(1).join(' ')));   // « de Gaulle », « Mendès France »
+        s.append(el('span', null, nom(m)));
         track.append(s);
       });
       lane.append(el('b', null, label), track); lanes.append(lane);
@@ -1551,8 +1598,7 @@ h1{font:800 clamp(50px,8.9vw,128px)/.88 var(--fd);letter-spacing:-.047em;margin-
       cut.append(el('span', null, 'Ve République')); lanes.append(cut);
     }
     const now = el('div', 'pv-now'); now.style.left = 'calc(116px + (100% - 116px) * ' + x(PV.droite_depuis) / 100 + ')';
-    now.append(el('span', null, 'Droite sans interruption depuis ' + depuis + ' · ' +
-      fLongAn((Date.parse(P.fin) - Date.parse(PV.droite_depuis)) / 31557600000)));
+    now.append(el('span', null, 'Droite sans interruption depuis ' + depuis + ' · ' + duree));
     lanes.append(now);
     // Un nom ne reste que s'il tient dans son mandat (mesure faite une fois la frise en place)
     [...lanes.querySelectorAll('.pv-seg span')].filter(sp => sp.offsetWidth + 8 > sp.parentElement.offsetWidth)
